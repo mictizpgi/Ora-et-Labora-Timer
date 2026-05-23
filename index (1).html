@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Ora et Labora</title>
+  <meta name="description" content="A peaceful Pomodoro focus timer — Pray and Work" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" id="theme-color-meta" content="#172539" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Ora et Labora" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font-family: 'Manrope', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+    }
+    #root {
+      min-height: 100dvh;
+      min-height: 100vh;
+      display: flex;
+    }
+    button { font-family: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid rgba(250,221,4,0.6); outline-offset: 2px; }
+
+    @keyframes po-float-a {
+      0%, 100% { transform: translate(0,0) scale(1); }
+      50%       { transform: translate(-30px,26px) scale(1.08); }
+    }
+    @keyframes po-float-b {
+      0%, 100% { transform: translate(0,0) scale(1); }
+      50%       { transform: translate(36px,-24px) scale(1.1); }
+    }
+    @keyframes po-float-c {
+      0%, 100% { transform: translate(0,0) scale(1); }
+      50%       { transform: translate(20px,30px) scale(1.05); }
+    }
+    @keyframes po-pulse {
+      0%, 100% { opacity: 0.55; transform: scale(1); }
+      50%       { opacity: 0.90; transform: scale(1.04); }
+    }
+    @keyframes po-complete {
+      0%   { transform: scale(1); }
+      25%  { transform: scale(1.06); }
+      60%  { transform: scale(0.97); }
+      100% { transform: scale(1); }
+    }
+    @keyframes po-glow {
+      0%   { opacity: 0.6; }
+      50%  { opacity: 1.0; }
+      100% { opacity: 0.6; }
+    }
+    @keyframes fadeIn   { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp  {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    @keyframes centerPop {
+      from { opacity: 0; transform: translate(-50%,-48%) scale(0.95); }
+      to   { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    }
+
+    .settings-backdrop {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      animation: fadeIn 200ms ease;
+    }
+    .settings-sheet {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 201;
+      animation: slideUp 320ms cubic-bezier(0.32,0.72,0,1);
+    }
+    @media (min-width: 600px) {
+      .settings-sheet {
+        top: 50%; left: 50%;
+        right: auto; bottom: auto;
+        width: 360px;
+        max-width: 90vw;
+        margin: 0;
+        border-radius: 24px !important;
+        animation: centerPop 220ms cubic-bezier(0.32,0.72,0,1);
+      }
+    }
+    @media (min-width: 600px) {
+      .app-card {
+        flex: none !important;
+        min-height: 740px;
+        border-radius: 36px !important;
+        overflow: hidden;
+        box-shadow: 0 40px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.12) !important;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── Palettes ─────────────────────────────────────────────────────────────────
+
+const PALETTES = {
+  navy: {
+    name: 'Navy', dark: true,
+    bg: '#172539', bg2: '#22364F',
+    ink: '#F6F4EC', inkSoft: '#C9D4E2',
+    card: '#2A4060',
+    glass: 'rgba(255,255,255,0.10)', glassBorder: 'rgba(255,255,255,0.18)',
+    discBg: 'rgba(20,32,50,0.55)', shadowTint: 'rgba(0,0,0,0.45)',
+    focus: { a: '#FFE85C', b: '#FADD04', ring: '#FADD04', tint: 'rgba(250,221,4,0.18)' },
+    short: { a: '#9EB8D6', b: '#6E91B8', ring: '#9EB8D6', tint: 'rgba(158,184,214,0.18)' },
+    long:  { a: '#E2E4DF', b: '#C9CBC9', ring: '#DDDFDB', tint: 'rgba(201,203,201,0.18)' },
+  },
+  brand: {
+    name: 'Brand', dark: false,
+    bg: '#F7F6F2', bg2: '#EDEEEA',
+    ink: '#1F2D3F', inkSoft: '#6A7382',
+    card: '#FFFFFF',
+    glass: 'rgba(255,255,255,0.6)', glassBorder: 'rgba(255,255,255,0.7)',
+    discBg: 'rgba(255,255,255,0.65)', shadowTint: 'rgba(31,45,63,0.18)',
+    focus: { a: '#FFE85C', b: '#FADD04', ring: '#E6C800', tint: '#FFF4B0' },
+    short: { a: '#5C7FA3', b: '#305679', ring: '#264866', tint: '#DDE5EE' },
+    long:  { a: '#DCDED9', b: '#C9CBC9', ring: '#A8ABA8', tint: '#E8E9E6' },
+  },
+  peach: {
+    name: 'Peach', dark: false,
+    bg: '#FBF6F1', bg2: '#F4ECFE',
+    ink: '#3A2E3F', inkSoft: '#7A6E80',
+    card: '#FFFFFF',
+    glass: 'rgba(255,255,255,0.6)', glassBorder: 'rgba(255,255,255,0.7)',
+    discBg: 'rgba(255,255,255,0.65)', shadowTint: 'rgba(80,50,90,0.22)',
+    focus: { a: '#FFC9B0', b: '#F7A98C', ring: '#F09575', tint: '#FFE4D6' },
+    short: { a: '#D8C8F5', b: '#B59FE8', ring: '#9F86DC', tint: '#EBE2FB' },
+    long:  { a: '#C8E0F5', b: '#9CC2E8', ring: '#7CAAD8', tint: '#E2EEF8' },
+  },
+};
+
+const MODES = {
+  focus: { id: 'focus', label: 'Focus',       duration: 25 * 60, sub: 'Deep work' },
+  short: { id: 'short', label: 'Short Break', duration:  5 * 60, sub: 'A little breath' },
+  long:  { id: 'long',  label: 'Long Break',  duration: 15 * 60, sub: 'Stretch & wander' },
+};
+
+// ─── Sanctus Bell Synthesis ───────────────────────────────────────────────────
+// Church bell timbres are characterized by inharmonic partials at specific
+// measured ratios. Three ascending strikes evoke the Sanctus elevation bells.
+
+let _audioCtx = null;
+
+function getAudioCtx() {
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return null;
+  if (!_audioCtx || _audioCtx.state === 'closed') _audioCtx = new Ctor();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+function initAudio() { getAudioCtx(); }
+
+function playBells(mode) {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+
+  const master = ctx.createGain();
+  master.gain.value = 0.48;
+  master.connect(ctx.destination);
+
+  // Carillon bell partial ratios + relative amplitudes (from acoustic analysis)
+  const PARTIALS = [
+    { r: 1.000, g: 0.80 },  // Hum (fundamental)
+    { r: 2.000, g: 0.55 },  // Prime (octave above hum)
+    { r: 2.756, g: 0.45 },  // Tierce (minor third above octave)
+    { r: 3.000, g: 0.22 },  // Quint  (fifth above octave)
+    { r: 4.070, g: 0.18 },  // Nominal (major third, two octaves up)
+    { r: 5.400, g: 0.07 },  // Superquint
+  ];
+
+  function strike(freq, when) {
+    const baseDur = 5.5;
+    PARTIALS.forEach(({ r, g }) => {
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq * r;
+
+      // Higher partials decay faster — gives the characteristic bell shimmer
+      const dur = baseDur / (r < 2.1 ? 1 : Math.pow(r, 0.65));
+      env.gain.setValueAtTime(0, when);
+      env.gain.linearRampToValueAtTime(g, when + 0.002);          // sharp attack
+      env.gain.exponentialRampToValueAtTime(0.0001, when + dur);  // long resonant decay
+
+      osc.connect(env);
+      env.connect(master);
+      osc.start(when);
+      osc.stop(when + dur + 0.05);
+    });
+  }
+
+  const t = ctx.currentTime;
+
+  if (mode === 'short') {
+    // Short break: single soft bell (A5 — clear, gentle)
+    strike(880, t);
+  } else {
+    // Focus / Long break: three ascending Sanctus bells — G5 → B5 → D6
+    // This forms a rising G major arpeggio, resolving and peaceful
+    strike(783.99, t + 0.00);   // G5
+    strike(987.77, t + 0.85);   // B5
+    strike(1174.66, t + 1.70);  // D6
+  }
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────────────
+
+function requestNotify() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function sendNotify(mode) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const msgs = {
+    focus: { title: '✦ Focus complete',    body: 'Time to rest and pray.' },
+    short: { title: 'Break over',          body: 'Return to your work.' },
+    long:  { title: '✦ Long break complete', body: 'Ready to focus again.' },
+  };
+  const { title, body } = msgs[mode];
+  try { new Notification(title, { body, icon: 'icon.svg', silent: true }); } catch {}
+}
+
+// ─── Ambient blobs ─────────────────────────────────────────────────────────────
+
+function AmbientBlobs({ palette, mode, enabled }) {
+  if (!enabled) return null;
+  const m = palette[mode];
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      <div style={{
+        position: 'absolute', top: '-12%', right: '-18%',
+        width: 360, height: 360, borderRadius: '50%',
+        background: `radial-gradient(circle at 30% 30%, ${m.a}, transparent 65%)`,
+        filter: 'blur(40px)', opacity: 0.85,
+        animation: 'po-float-a 18s ease-in-out infinite',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-15%', left: '-20%',
+        width: 380, height: 380, borderRadius: '50%',
+        background: `radial-gradient(circle at 60% 40%, ${palette.short.a}, transparent 65%)`,
+        filter: 'blur(50px)', opacity: 0.7,
+        animation: 'po-float-b 22s ease-in-out infinite',
+      }} />
+      <div style={{
+        position: 'absolute', top: '40%', left: '-10%',
+        width: 240, height: 240, borderRadius: '50%',
+        background: `radial-gradient(circle at 50% 50%, ${palette.long.a}, transparent 65%)`,
+        filter: 'blur(40px)', opacity: 0.55,
+        animation: 'po-float-c 26s ease-in-out infinite',
+      }} />
+    </div>
+  );
+}
+
+// ─── Mode toggle ───────────────────────────────────────────────────────────────
+
+function ModeToggle({ value, onChange, palette }) {
+  const modes = ['focus', 'short', 'long'];
+  const idx = modes.indexOf(value);
+  const dark = palette.dark;
+  return (
+    <div style={{
+      position: 'relative',
+      display: 'grid', gridTemplateColumns: 'repeat(3,1fr)',
+      background: palette.glass,
+      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+      borderRadius: 999, padding: 5,
+      border: `1px solid ${palette.glassBorder}`,
+      boxShadow: dark
+        ? `0 1px 0 rgba(255,255,255,0.08) inset, 0 8px 24px -10px ${palette.shadowTint}`
+        : `0 1px 0 rgba(255,255,255,0.9) inset, 0 8px 24px -10px ${palette.shadowTint}`,
+    }}>
+      {/* sliding pill indicator */}
+      <div style={{
+        position: 'absolute', top: 5, bottom: 5,
+        left: `calc(${idx * 100 / 3}% + 5px)`,
+        width: `calc(${100 / 3}% - 10px)`,
+        background: `linear-gradient(135deg, ${palette[value].a}, ${palette[value].b})`,
+        borderRadius: 999,
+        boxShadow: `0 6px 18px -6px ${palette[value].ring}88`,
+        transition: 'left 480ms cubic-bezier(0.5,1.4,0.5,1), background 600ms ease',
+      }} />
+      {modes.map(m => {
+        const isActive = value === m;
+        const activeColor = dark && m === 'focus' ? '#1A2438' : palette.ink;
+        return (
+          <button key={m} onClick={() => onChange(m)} style={{
+            position: 'relative', zIndex: 1,
+            background: 'transparent', border: 'none',
+            padding: '10px 0', fontSize: 13, fontWeight: isActive ? 600 : 500,
+            letterSpacing: '0.02em',
+            color: isActive ? activeColor : palette.inkSoft,
+            transition: 'color 300ms ease',
+          }}>
+            {MODES[m].label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Timer ring ────────────────────────────────────────────────────────────────
+
+function TimerRing({ progress, color, ringStyle, children, pulsing, palette, justFinished }) {
+  const size = 280;
+  const stroke = 14;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - progress);
+  const gradId = `rg-${color.ring.replace(/[^a-z0-9]/gi, '')}`;
+  const dark = palette.dark;
+
+  return (
+    <div style={{
+      position: 'relative', width: size, height: size,
+      animation: justFinished ? 'po-complete 900ms cubic-bezier(0.36,0.07,0.19,0.97)' : 'none',
+    }}>
+      {/* halo glow */}
+      <div style={{
+        position: 'absolute', inset: -30,
+        background: `radial-gradient(circle, ${color.a}${dark ? '99' : '77'}, transparent 65%)`,
+        filter: 'blur(20px)',
+        opacity: justFinished ? 1 : pulsing ? 0.9 : 0.6,
+        transition: 'opacity 800ms ease',
+        animation: pulsing ? 'po-pulse 4.5s ease-in-out infinite'
+                 : justFinished ? 'po-glow 900ms ease' : 'none',
+      }} />
+      {/* frosted glass disc */}
+      <div style={{
+        position: 'absolute', inset: stroke + 6, borderRadius: '50%',
+        background: palette.discBg,
+        backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
+        boxShadow: dark
+          ? `inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -20px 50px rgba(0,0,0,0.35), 0 30px 60px -30px rgba(0,0,0,0.6)`
+          : `inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -10px 30px ${color.tint}80, 0 30px 60px -30px ${color.ring}55`,
+        border: `1px solid ${palette.glassBorder}`,
+      }} />
+      <svg width={size} height={size} style={{ position: 'relative', transform: 'rotate(-90deg)' }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={color.a} />
+            <stop offset="100%" stopColor={color.b} />
+          </linearGradient>
+        </defs>
+        {/* track */}
+        <circle cx={size/2} cy={size/2} r={r} fill="none"
+          stroke={color.tint} strokeWidth={stroke} />
+        {/* progress arc */}
+        <circle cx={size/2} cy={size/2} r={r} fill="none"
+          stroke={ringStyle === 'gradient' ? `url(#${gradId})` : color.ring}
+          strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={offset}
+          style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(0.4,0,0.2,1), stroke 600ms ease' }}
+        />
+      </svg>
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Soft button ───────────────────────────────────────────────────────────────
+
+function SoftButton({ children, onClick, variant = 'ghost', color, big = false, palette }) {
+  const [hover, setHover] = useState(false);
+  const isPrimary = variant === 'primary';
+  const size = big ? 76 : 56;
+  const dark = palette.dark;
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: size, height: size, borderRadius: '50%',
+        border: isPrimary ? 'none' : `1px solid ${palette.glassBorder}`,
+        background: isPrimary
+          ? `linear-gradient(135deg, ${color.a}, ${color.b})`
+          : palette.glass,
+        backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+        boxShadow: isPrimary
+          ? `0 12px 28px -10px ${color.ring}99, inset 0 1px 0 rgba(255,255,255,0.5)`
+          : dark
+            ? `0 8px 22px -10px ${palette.shadowTint}, inset 0 1px 0 rgba(255,255,255,0.12)`
+            : `0 8px 22px -10px ${palette.shadowTint}, inset 0 1px 0 rgba(255,255,255,0.85)`,
+        color: isPrimary
+          ? (dark && color.ring === '#FADD04' ? '#1A2438' : '#fff')
+          : palette.ink,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'transform 220ms cubic-bezier(0.5,1.4,0.5,1), box-shadow 220ms ease',
+        transform: hover ? 'translateY(-2px) scale(1.04)' : 'none',
+        outline: 'none',
+      }}>
+      {children}
+    </button>
+  );
+}
+
+// ─── Icons ─────────────────────────────────────────────────────────────────────
+
+const Icon = {
+  play: (s=22) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5.5v13a1 1 0 0 0 1.55.83l10-6.5a1 1 0 0 0 0-1.66l-10-6.5A1 1 0 0 0 8 5.5z"/>
+    </svg>
+  ),
+  pause: (s=22) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor">
+      <rect x="7" y="5" width="4" height="14" rx="1.5"/>
+      <rect x="13" y="5" width="4" height="14" rx="1.5"/>
+    </svg>
+  ),
+  reset: (s=18) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7"/>
+      <path d="M3 4v5h5"/>
+    </svg>
+  ),
+  skip: (s=18) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M5 5.5v13a1 1 0 0 0 1.55.83L15 13.83V18.5a1 1 0 0 0 2 0v-13a1 1 0 0 0-2 0v4.67L6.55 4.67A1 1 0 0 0 5 5.5z"/>
+    </svg>
+  ),
+  settings: (s=18) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  ),
+  x: (s=16) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  ),
+};
+
+// ─── Settings panel (bottom sheet on mobile, centered popup on desktop) ────────
+
+function SettingsPanel({ onClose, tweaks, setTweak, palette }) {
+  const dark = palette.dark;
+  const bg = dark ? '#1e3252' : '#ffffff';
+  const border = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)';
+  const sectionLabel = { fontSize: 11, fontWeight: 600, letterSpacing: '0.08em',
+    textTransform: 'uppercase', color: dark ? 'rgba(201,212,226,0.55)' : 'rgba(60,60,67,0.5)',
+    padding: '16px 0 6px' };
+
+  function Row({ label, children, last }) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '13px 0',
+        borderBottom: last ? 'none' : `1px solid ${border}`,
+      }}>
+        <span style={{ fontSize: 15, fontWeight: 500, color: palette.ink }}>{label}</span>
+        {children}
+      </div>
+    );
+  }
+
+  function Seg({ value, options, onChange }) {
+    return (
+      <div style={{
+        display: 'flex', gap: 3,
+        background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+        borderRadius: 8, padding: 3,
+      }}>
+        {options.map(o => {
+          const on = value === o.v;
+          return (
+            <button key={o.v} onClick={() => onChange(o.v)} style={{
+              padding: '5px 13px', borderRadius: 6, border: 'none',
+              background: on ? (dark ? 'rgba(255,255,255,0.18)' : '#fff') : 'transparent',
+              color: on ? palette.ink : palette.inkSoft,
+              fontSize: 13, fontWeight: on ? 600 : 500,
+              boxShadow: on ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
+              transition: 'all 160ms ease',
+            }}>{o.l}</button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function Toggle({ value, onChange }) {
+    return (
+      <button onClick={() => onChange(!value)} style={{
+        position: 'relative', width: 48, height: 28, borderRadius: 14, border: 'none', padding: 0,
+        background: value ? '#34c759' : dark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.16)',
+        transition: 'background 200ms ease',
+      }}>
+        <div style={{
+          position: 'absolute', top: 3, left: value ? 23 : 3,
+          width: 22, height: 22, borderRadius: '50%',
+          background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.28)',
+          transition: 'left 200ms cubic-bezier(0.5,1.3,0.5,1)',
+        }} />
+      </button>
+    );
+  }
+
+  return (
+    <>
+      <div className="settings-backdrop" onClick={onClose} />
+      <div className="settings-sheet" style={{
+        background: bg,
+        borderRadius: '24px 24px 0 0',
+        boxShadow: '0 -20px 60px rgba(0,0,0,0.30)',
+        paddingBottom: 'max(28px, env(safe-area-inset-bottom, 0px) + 12px)',
+      }}>
+        {/* drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 2px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2,
+            background: dark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.14)' }} />
+        </div>
+        {/* header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 2px' }}>
+          <span style={{ fontSize: 17, fontWeight: 600, color: palette.ink }}>Settings</span>
+          <button onClick={onClose} style={{
+            background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            border: 'none', borderRadius: 8, padding: '5px 7px',
+            color: palette.inkSoft,
+          }}>
+            {Icon.x(16)}
+          </button>
+        </div>
+        {/* content */}
+        <div style={{ padding: '0 20px' }}>
+          {/* Palette chips */}
+          <div style={sectionLabel}>Palette</div>
+          <div style={{ display: 'flex', gap: 10, paddingBottom: 4 }}>
+            {Object.entries(PALETTES).map(([key, pal]) => {
+              const active = tweaks.palette === key;
+              return (
+                <button key={key} onClick={() => setTweak('palette', key)} style={{
+                  flex: 1, height: 56, borderRadius: 14,
+                  border: active ? `2.5px solid ${palette.focus.ring}` : '2.5px solid transparent',
+                  background: `linear-gradient(160deg, ${pal.bg} 0%, ${pal.bg2} 100%)`,
+                  cursor: 'pointer', overflow: 'hidden', position: 'relative',
+                  transition: 'all 180ms ease',
+                  boxShadow: active ? `0 0 0 1px ${palette.focus.ring}` : 'none',
+                }}>
+                  {/* accent swatch */}
+                  <div style={{
+                    position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+                    width: 22, height: 6, borderRadius: 3,
+                    background: `linear-gradient(90deg, ${pal.focus.a}, ${pal.focus.b})`,
+                  }} />
+                  <span style={{
+                    position: 'absolute', bottom: 8, left: 0, right: 0,
+                    textAlign: 'center', fontSize: 11, fontWeight: 600, color: pal.ink,
+                  }}>{pal.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={sectionLabel}>Display</div>
+          <Row label="Timer Font">
+            <Seg value={tweaks.displayFont} onChange={v => setTweak('displayFont', v)}
+              options={[{v:'serif',l:'Serif'},{v:'sans',l:'Sans'}]} />
+          </Row>
+          <Row label="Ring Style">
+            <Seg value={tweaks.ringStyle} onChange={v => setTweak('ringStyle', v)}
+              options={[{v:'gradient',l:'Gradient'},{v:'solid',l:'Solid'}]} />
+          </Row>
+          <Row label="Ambient Blobs" last>
+            <Toggle value={tweaks.ambientBlobs} onChange={v => setTweak('ambientBlobs', v)} />
+          </Row>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Main timer ────────────────────────────────────────────────────────────────
+
+function Pomodoroly({ tweaks, setTweak, onOpenSettings }) {
+  const palette = PALETTES[tweaks.palette] || PALETTES.navy;
+  const [mode, setMode] = useState('focus');
+  const [remaining, setRemaining] = useState(MODES.focus.duration);
+  const [running, setRunning] = useState(false);
+  const [completed, setCompleted] = useState(0);
+  const [totalSessions, setTotalSessions] = useState(0);
+  const [changing, setChanging] = useState(false);
+  const [justFinished, setJustFinished] = useState(false);
+
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
+  const duration = MODES[mode].duration;
+  const progress = 1 - remaining / duration;
+  const color = palette[mode];
+
+  const displayFont = tweaks.displayFont === 'serif'
+    ? "'Instrument Serif', Georgia, serif"
+    : "'Manrope', system-ui, sans-serif";
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      setRemaining(r => {
+        if (r <= 1) {
+          clearInterval(id);
+          setRunning(false);
+          const cur = modeRef.current;
+
+          playBells(cur);
+          sendNotify(cur);
+          setJustFinished(true);
+          setTimeout(() => setJustFinished(false), 1200);
+
+          if (cur === 'focus') {
+            setCompleted(c => {
+              const next = c + 1;
+              if (next >= 4) { setTimeout(() => switchMode('long'), 700); return 0; }
+              setTimeout(() => switchMode('short'), 700);
+              return next;
+            });
+            setTotalSessions(t => t + 1);
+          } else {
+            setTimeout(() => switchMode('focus'), 700);
+          }
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  function switchMode(m) {
+    setChanging(true);
+    setTimeout(() => {
+      setMode(m);
+      setRemaining(MODES[m].duration);
+      setRunning(false);
+      setTimeout(() => setChanging(false), 50);
+    }, 250);
+  }
+
+  function handleModeChange(m) { if (m !== mode) switchMode(m); }
+
+  function handleStartPause() {
+    initAudio();
+    if (!running) requestNotify();
+    setRunning(r => !r);
+  }
+
+  function handleReset() {
+    setRunning(false);
+    setRemaining(MODES[mode].duration);
+  }
+
+  function handleSkip() {
+    setRunning(false);
+    if (mode === 'focus') {
+      setCompleted(c => {
+        const next = c + 1;
+        if (next >= 4) { switchMode('long'); return 0; }
+        switchMode('short');
+        return next;
+      });
+      setTotalSessions(t => t + 1);
+    } else {
+      switchMode('focus');
+    }
+  }
+
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
+
+  return (
+    <div style={{
+      position: 'relative',
+      width: '100%', height: '100%', minHeight: '100%',
+      background: `linear-gradient(165deg, ${palette.bg} 0%, ${palette.bg2} 100%)`,
+      transition: 'background 800ms ease',
+      overflow: 'hidden',
+      color: palette.ink,
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <AmbientBlobs palette={palette} mode={mode} enabled={tweaks.ambientBlobs} />
+
+      {/* Header */}
+      <div style={{
+        position: 'relative', zIndex: 2,
+        padding: '0 24px',
+        paddingTop: 'max(52px, env(safe-area-inset-top, 0px) + 20px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div>
+          <div style={{
+            fontFamily: "'Instrument Serif', Georgia, serif",
+            fontSize: 28, fontStyle: 'italic',
+            lineHeight: 1, letterSpacing: '-0.005em',
+            color: palette.ink,
+          }}>Ora et Labora</div>
+          <div style={{
+            fontSize: 11, marginTop: 4,
+            letterSpacing: '0.18em', textTransform: 'uppercase',
+            color: palette.inkSoft,
+          }}>
+            {MODES[mode].sub}
+          </div>
+        </div>
+        <button onClick={onOpenSettings} style={{
+          width: 40, height: 40, borderRadius: '50%',
+          background: palette.glass,
+          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+          border: `1px solid ${palette.glassBorder}`,
+          boxShadow: `0 6px 18px -8px ${palette.shadowTint}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: palette.ink, cursor: 'pointer',
+        }}>
+          {Icon.settings(17)}
+        </button>
+      </div>
+
+      {/* Mode toggle */}
+      <div style={{ position: 'relative', zIndex: 2, padding: '20px 24px 0' }}>
+        <ModeToggle value={mode} onChange={handleModeChange} palette={palette} />
+      </div>
+
+      {/* Ring */}
+      <div style={{
+        position: 'relative', zIndex: 2, flex: 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '16px 0',
+        opacity: changing ? 0 : 1,
+        transform: changing ? 'scale(0.93)' : 'scale(1)',
+        transition: 'opacity 350ms ease, transform 500ms cubic-bezier(0.4,0,0.2,1)',
+      }}>
+        <TimerRing
+          progress={progress} color={color}
+          ringStyle={tweaks.ringStyle}
+          pulsing={running} palette={palette}
+          justFinished={justFinished}
+        >
+          <div style={{
+            fontFamily: displayFont,
+            fontSize: 64,
+            fontWeight: tweaks.displayFont === 'serif' ? 400 : 200,
+            fontStyle: tweaks.displayFont === 'serif' ? 'italic' : 'normal',
+            letterSpacing: tweaks.displayFont === 'serif' ? '-0.01em' : '-0.04em',
+            lineHeight: 1, color: palette.ink,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {String(mins).padStart(2,'0')}:{String(secs).padStart(2,'0')}
+          </div>
+          <div style={{
+            fontSize: 11, letterSpacing: '0.22em',
+            textTransform: 'uppercase', color: palette.inkSoft,
+            marginTop: 4,
+          }}>
+            {running ? 'in flow' : remaining === duration ? 'ready' : 'paused'}
+          </div>
+        </TimerRing>
+      </div>
+
+      {/* Session dots */}
+      <div style={{
+        position: 'relative', zIndex: 2,
+        display: 'flex', justifyContent: 'center', gap: 12,
+        padding: '0 24px 18px',
+      }}>
+        {[0,1,2,3].map(i => {
+          const filled = i < completed;
+          const active = i === completed && mode === 'focus';
+          return (
+            <div key={i} style={{
+              width: filled ? 26 : 9, height: 9, borderRadius: 999,
+              background: filled
+                ? `linear-gradient(135deg, ${palette.focus.a}, ${palette.focus.b})`
+                : active
+                  ? palette.focus.tint
+                  : palette.dark ? 'rgba(255,255,255,0.18)' : 'rgba(120,100,130,0.18)',
+              boxShadow: filled ? `0 4px 10px -4px ${palette.focus.ring}80` : 'none',
+              transition: 'all 600ms cubic-bezier(0.5,1.4,0.5,1)',
+            }} />
+          );
+        })}
+      </div>
+
+      {/* Controls */}
+      <div style={{
+        position: 'relative', zIndex: 2,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 22,
+        padding: '0 28px',
+        paddingBottom: 'max(44px, env(safe-area-inset-bottom, 0px) + 28px)',
+      }}>
+        <SoftButton onClick={handleReset} palette={palette}>{Icon.reset(20)}</SoftButton>
+        <SoftButton onClick={handleStartPause} variant="primary" color={color} big palette={palette}>
+          {running ? Icon.pause(28) : Icon.play(28)}
+        </SoftButton>
+        <SoftButton onClick={handleSkip} palette={palette}>{Icon.skip(18)}</SoftButton>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        position: 'relative', zIndex: 2,
+        textAlign: 'center', paddingBottom: 16,
+        fontSize: 11, letterSpacing: '0.18em',
+        textTransform: 'uppercase', color: palette.inkSoft,
+      }}>
+        {totalSessions} {totalSessions === 1 ? 'session' : 'sessions'} today
+        {totalSessions > 0 && ` · ${Math.floor(totalSessions * 25 / 60)}h ${totalSessions * 25 % 60}m`}
+      </div>
+    </div>
+  );
+}
+
+// ─── App shell ─────────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'ora-et-labora-prefs';
+const DEFAULT_TWEAKS = { palette: 'navy', ringStyle: 'gradient', displayFont: 'serif', ambientBlobs: true };
+
+function loadPrefs() {
+  try { return { ...DEFAULT_TWEAKS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }; }
+  catch { return DEFAULT_TWEAKS; }
+}
+
+function App() {
+  const [tweaks, setTweaksState] = useState(loadPrefs);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [installDismissed] = useState(() => localStorage.getItem('ora-install-dismissed') === '1');
+  const [isIOS, setIsIOS] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  const palette = PALETTES[tweaks.palette] || PALETTES.navy;
+
+  function setTweak(k, v) {
+    setTweaksState(prev => {
+      const next = { ...prev, [k]: v };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    setIsIOS(ios);
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    setIsInstalled(standalone);
+
+    const onPrompt = e => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+  }, []);
+
+  useEffect(() => {
+    const meta = document.getElementById('theme-color-meta');
+    if (meta) meta.content = palette.dark ? '#172539' : palette.bg;
+  }, [tweaks.palette]);
+
+  async function handleInstall() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstallPrompt(null);
+  }
+
+  function dismissInstall() {
+    try { localStorage.setItem('ora-install-dismissed', '1'); } catch {}
+    setInstallPrompt(null);
+    setIsIOS(false);
+  }
+
+  const showBanner = !isInstalled && !installDismissed && (installPrompt || isIOS);
+
+  return (
+    <div style={{
+      width: '100%',
+      minHeight: '100dvh', minHeight: '100vh',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      background: palette.dark ? '#0F1928' : '#E8E9E4',
+      transition: 'background 600ms ease',
+    }}>
+      {/* The app card */}
+      <div className="app-card" style={{
+        width: '100%', maxWidth: 440,
+        flex: 1, display: 'flex', flexDirection: 'column',
+      }}>
+        <Pomodoroly tweaks={tweaks} setTweak={setTweak} onOpenSettings={() => setSettingsOpen(true)} />
+      </div>
+
+      {/* PWA install banner */}
+      {showBanner && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+          padding: '14px 20px',
+          paddingBottom: 'max(14px, env(safe-area-inset-bottom, 0px) + 14px)',
+          background: palette.dark ? '#1e3252' : '#fff',
+          borderTop: `1px solid ${palette.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
+          display: 'flex', alignItems: 'center', gap: 12,
+          boxShadow: '0 -8px 24px rgba(0,0,0,0.15)',
+          animation: 'slideUp 400ms cubic-bezier(0.32,0.72,0,1)',
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+            background: 'linear-gradient(135deg, #172539, #22364F)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          }}>
+            <span style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 16, color: '#FADD04', fontWeight: 400 }}>OL</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: palette.ink }}>Add to Home Screen</div>
+            <div style={{ fontSize: 12, color: palette.inkSoft, marginTop: 1 }}>
+              {isIOS ? 'Tap Share ↑ then "Add to Home Screen"' : 'Install for quick access anytime'}
+            </div>
+          </div>
+          {!isIOS && installPrompt && (
+            <button onClick={handleInstall} style={{
+              padding: '8px 16px', borderRadius: 10, border: 'none', flexShrink: 0,
+              background: `linear-gradient(135deg, ${palette.focus.a}, ${palette.focus.b})`,
+              color: palette.dark ? '#1A2438' : '#1A2438',
+              fontSize: 13, fontWeight: 700,
+              boxShadow: `0 4px 12px -4px ${palette.focus.ring}88`,
+            }}>Install</button>
+          )}
+          <button onClick={dismissInstall} style={{
+            background: 'none', border: 'none', padding: 4,
+            color: palette.inkSoft, flexShrink: 0,
+          }}>
+            {Icon.x(16)}
+          </button>
+        </div>
+      )}
+
+      {/* Settings panel */}
+      {settingsOpen && (
+        <SettingsPanel
+          onClose={() => setSettingsOpen(false)}
+          tweaks={tweaks}
+          setTweak={setTweak}
+          palette={palette}
+        />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

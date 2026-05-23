@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="115" fill="#172539"/>
+  <!-- Timer ring arc (315°, open at top-right) -->
+  <circle cx="256" cy="268" r="185" fill="none" stroke="#FADD04"
+    stroke-width="22" stroke-linecap="round"
+    stroke-dasharray="990 178"
+    transform="rotate(-90 256 268)" opacity="0.9"/>
+  <!-- Monogram -->
+  <text x="256" y="320"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-style="italic" font-size="200" font-weight="400"
+    fill="#FADD04" text-anchor="middle">OL</text>
+</svg>
