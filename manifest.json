@@ -2,8 +2,8 @@
   "name": "Ora et Labora",
   "short_name": "Ora et Labora",
   "description": "A peaceful Pomodoro focus timer — Pray and Work",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/Ora-et-Labora-Timer/",
+  "scope": "/Ora-et-Labora-Timer/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#172539",
@@ -28,7 +28,7 @@
       "name": "Start Focus",
       "short_name": "Focus",
       "description": "Start a 25-minute focus session",
-      "url": "/?mode=focus"
+      "url": "/Ora-et-Labora-Timer/?mode=focus"
     }
   ]
 }
