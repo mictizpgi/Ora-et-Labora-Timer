@@ -1,0 +1,46 @@
+{
+  "name": "Ora et Labora",
+  "short_name": "Ora et Labora",
+  "description": "A peaceful Pomodoro focus timer — Pray and Work",
+  "start_url": "/Ora-et-Labora-Timer/",
+  "scope": "/Ora-et-Labora-Timer/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#172539",
+  "background_color": "#172539",
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["productivity", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Start Focus",
+      "short_name": "Focus",
+      "description": "Start a 25-minute focus session",
+      "url": "/Ora-et-Labora-Timer/?mode=focus"
+    }
+  ]
+}
